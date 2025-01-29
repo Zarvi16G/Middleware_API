@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template, g
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -48,28 +48,27 @@ def city_weather(city: str):
     if bytes_data is not None:
         decode_data = bytes_data.decode('utf-8')
         dict_data = json.loads(decode_data)
-        return jsonify(dict_data), 200
-    else: 
-        #We get the total weather information from the third api.
-        url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?key={API_KEY}'
-        response = requests.get(url)
-        
-        #If the country is not found we get 404 with jsonify.
-        if response.status_code == 400:
-            return jsonify("Error: We don't find {city}"), 404
-            # return f"Error: We don't find {city}"
-        elif response.status_code != 200:
-            return jsonify({"error": f"Unexpected error: {response.status_code}"}), response.status_code
-        #We manage the information with json because redis doesn't save dicts.
-        organized_data = clear_response(response.json())
-        info = json.dumps(organized_data)
+        result = render_template('index.html', city=city, data=dict_data)
+        return result
+    #We get the total weather information from the third api.
+    url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?key={API_KEY}'
+    response = requests.get(url)
+    
+    #If the country is not found we get 404 with jsonify.
+    if response.status_code == 400:
+        return jsonify("Error: We don't find {city}"), 404
+        # return f"Error: We don't find {city}"
+    elif response.status_code != 200:
+        return jsonify({"error": f"Unexpected error: {response.status_code}"}), response.status_code
+    #We manage the information with json because redis doesn't save dicts.
+    organized_data = clear_response(response.json())
+    info = json.dumps(organized_data)
 
-        #We put expiration time by seconds and we save the information in the redis cache.
-        r.set(city, info, ex=10)
-        
-        return jsonify(organized_data), 200
-
-
+    #We put expiration time by seconds and we save the information in the redis cache.
+    r.set(city, info, ex=10)
+    
+    result = render_template('index.html', city=city, data=organized_data)
+    return result
 
 #We classify the weather information.
 def clear_response(data: dict):
